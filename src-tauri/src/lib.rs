@@ -1147,7 +1147,12 @@ pub fn run() {
     let mut context = tauri::generate_context!();
     // the folders this build keeps its things in, as its config names them - before anything uses them, a job's
     // runner among them (folders.rs)
-    folders::built_with(context.config().app.app_directories_override.clone());
+    let built = folders::Built { over: context.config().app.app_directories_override.clone(), identifier: context.config().identifier.clone() };
+    // (folders it cannot work out: not started, and said - no log yet, as there is no folder for it)
+    if let Err(why) = folders::built_with(built) {
+        eprintln!("Meno cannot start: {why}");
+        std::process::exit(1);
+    }
     // started to run a job (jobs.rs): that, apart from Meno, and nothing else
     if let Some(code) = jobs::job_mode() {
         std::process::exit(code);

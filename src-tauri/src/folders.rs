@@ -71,16 +71,33 @@ pub fn cache_base() -> Option<PathBuf> {
 }
 
 /// The folders the config Meno was built with names (`app >
-/// appDirectoriesOverride`): set once at a start, before anything uses them
-/// (lib.rs `run`), so that Meno's own reads and a job's runner, which has no
-/// window to ask, find the folders Tauri's `app_*_dir` do. A build given
-/// other folders - a release candidate kept apart from the released Meno -
-/// keeps everything in those, its jobs too. Not set (a test): Meno's own.
-static BUILT_WITH: OnceLock<Option<AppDirectoriesOverride>> = OnceLock::new();
+/// appDirectoriesOverride`) and its identifier: set once at a start, before
+/// anything uses them (lib.rs `run`), so that Meno's own reads and a job's
+/// runner, which has no window to ask, find the folders Tauri's `app_*_dir`
+/// do. A build given other folders - a release candidate kept apart from the
+/// released Meno - keeps everything in those, its jobs too. Not set (a
+/// test): the released Meno's.
+static BUILT_WITH: OnceLock<Built> = OnceLock::new();
 
-/// The folders of the config Meno was built with, taken at a start (lib.rs `run`); later calls change nothing.
-pub fn built_with(folders: Option<AppDirectoriesOverride>) {
-    let _ = BUILT_WITH.set(folders);
+/// What of the config Meno was built with says where its folders are.
+#[derive(Clone, Debug)]
+pub struct Built {
+    pub over: Option<AppDirectoriesOverride>,
+    pub identifier: String,
+}
+
+/// The folders of the config Meno was built with, taken at a start (lib.rs
+/// `run`; later calls change nothing) - or why Meno cannot keep its things
+/// where that config says, in which case it must not start: no folder is
+/// then given, never the released Meno's in place of those named.
+pub fn built_with(built: Built) -> Result<(), String> {
+    for which in [Named::Data, Named::LocalData] {
+        if let Some(over) = &built.over {
+            named_by(over, which)?;
+        }
+    }
+    let _ = BUILT_WITH.set(built);
+    Ok(())
 }
 
 /// One of Meno's folders an `appDirectoriesOverride` can name.
@@ -90,53 +107,76 @@ pub enum Named {
     LocalData,
 }
 
-/// Where `over` puts folder `which`, as Tauri resolves it: a path beginning
-/// with a system folder's variable (`$DATA/Meno`) in that folder, an
-/// absolute one as it is, another beside Meno's executable; one folder for
-/// them all (`Root`) for both. None where `over` names none for it, or
-/// begins with a variable this computer has no folder for.
-pub fn named_by(over: &AppDirectoriesOverride, which: Named) -> Option<PathBuf> {
+/// Where `over` puts folder `which`: a path beginning with `$DATA`,
+/// `$LOCALDATA`, `$CONFIG`, `$CACHE` or `$HOME` in that system folder, as
+/// Tauri resolves it; an absolute path as it is; one folder for them all
+/// (`Root`) for both - `.` and a trailing separator dropped, as Tauri does.
+/// None where `over` names none for it. Any other path is refused, with
+/// why: Tauri's other variables, and a relative path (which Tauri puts
+/// beside the app, a folder that differs by system and by how Meno is
+/// installed) - so that Meno never guesses a folder Tauri may not have.
+pub fn named_by(over: &AppDirectoriesOverride, which: Named) -> Result<Option<PathBuf>, String> {
     let path = match over {
-        AppDirectoriesOverride::Root(root) => root,
+        AppDirectoriesOverride::Root(root) => Some(root),
         AppDirectoriesOverride::Directories(d) => match which {
-            Named::Data => d.data.as_ref()?,
-            Named::LocalData => d.local_data.as_ref()?,
+            Named::Data => d.data.as_ref(),
+            Named::LocalData => d.local_data.as_ref(),
         },
     };
+    let Some(path) = path else { return Ok(None) };
+    let refused = |why: &str| Err(format!("the folders this Meno was built to keep its things in cannot be worked out: `{}` {why}", path.display()));
     let mut parts = path.components();
     if let Some(std::path::Component::Normal(first)) = parts.next() {
         if let Some(var) = first.to_str().filter(|v| v.starts_with('$')) {
             let base = match var {
                 "$DATA" => data_base(),
                 "$LOCALDATA" => local_data_base(),
-                "$CONFIG" => dirs::config_dir(),
+                "$CONFIG" => dirs::config_dir().filter(|p| p.is_absolute()),
                 "$CACHE" => cache_base(),
-                "$HOME" => dirs::home_dir(),
-                _ => None,
-            }?;
-            return Some(base.join(parts.as_path()));
+                "$HOME" => dirs::home_dir().filter(|p| p.is_absolute()),
+                _ => return refused(&format!("begins with `{var}`; Meno knows only $DATA, $LOCALDATA, $CONFIG, $CACHE and $HOME")),
+            };
+            let Some(base) = base else { return refused(&format!("begins with `{var}`, a folder this computer has none of")) };
+            return Ok(Some(base.join(parts.as_path()).components().collect()));
         }
     }
     if path.is_absolute() {
-        return Some(path.clone());
+        return Ok(Some(path.components().collect()));
     }
-    Some(std::env::current_exe().ok()?.parent()?.join(path))
+    refused("is not absolute and begins with no folder's variable")
 }
 
-/// Folder `which` as the config Meno was built with names it, where it does.
-fn built(which: Named) -> Option<PathBuf> {
-    BUILT_WITH.get()?.as_ref().and_then(|over| named_by(over, which))
+/// Folder `which` as `built` has it: where its override names it, there (or
+/// none, where that cannot be worked out - never the released Meno's in its
+/// place); where it names none, Tauri's own, the system folder's under the
+/// identifier; nothing taken (a test), the released Meno's.
+pub fn folder_of(built: Option<&Built>, which: Named) -> Option<PathBuf> {
+    let Some(built) = built else {
+        return match which {
+            Named::Data => meno_data_dir(),
+            Named::LocalData => meno_local_data_dir(),
+        };
+    };
+    match built.over.as_ref().map(|over| named_by(over, which)) {
+        Some(Ok(Some(path))) => Some(path),
+        Some(Err(_)) => None,
+        Some(Ok(None)) | None => match which {
+            Named::Data => data_base(),
+            Named::LocalData => local_data_base(),
+        }
+        .map(|b| b.join(&built.identifier)),
+    }
 }
 
 /// Meno's data folder (`app_data_dir`), where the settings and the log are.
 pub fn data_dir() -> Option<PathBuf> {
-    built(Named::Data).or_else(meno_data_dir)
+    folder_of(BUILT_WITH.get(), Named::Data)
 }
 
 /// Meno's local data folder (`app_local_data_dir`): environments, tools,
 /// jobs - and on Windows its caches (`app_cache_dir`) too.
 pub fn local_data_dir() -> Option<PathBuf> {
-    built(Named::LocalData).or_else(meno_local_data_dir)
+    folder_of(BUILT_WITH.get(), Named::LocalData)
 }
 
 /// The released Meno's data folder, as its config names it.
@@ -462,26 +502,66 @@ mod tests {
         old
     }
 
+    /// A config's JSON merged with a platform's over it, as the build does (a JSON merge patch: objects merged key by key, null taking a key away, anything else put in place).
+    fn merged(base: &mut serde_json::Value, over: &serde_json::Value) {
+        match (base.as_object_mut(), over.as_object()) {
+            (Some(b), Some(o)) => {
+                for (k, v) in o {
+                    if v.is_null() {
+                        b.remove(k);
+                    } else {
+                        merged(b.entry(k.clone()).or_insert(serde_json::Value::Null), v);
+                    }
+                }
+            }
+            _ => *base = over.clone(),
+        }
+    }
+
+    fn over(json: &str) -> AppDirectoriesOverride {
+        serde_json::from_str(json).unwrap()
+    }
+
     #[test]
     fn a_build_given_other_folders_keeps_everything_in_them() {
         // (folders of its own, as a release candidate's config gives them beside tauri.conf.json's)
-        let trial: AppDirectoriesOverride = serde_json::from_str(r#"{"data":"$DATA/MenoTrial","localData":"$LOCALDATA/MenoTrial/data"}"#).unwrap();
-        assert_eq!(named_by(&trial, Named::Data), data_base().map(|b| b.join("MenoTrial")));
-        assert_eq!(named_by(&trial, Named::LocalData), local_data_base().map(|b| b.join("MenoTrial").join("data")));
-        // (one folder for them all; one beside the executable; a variable with no folder here names none)
-        let root: AppDirectoriesOverride = serde_json::from_str(r#""$HOME/MenoTrial""#).unwrap();
-        assert_eq!(named_by(&root, Named::LocalData), dirs::home_dir().map(|h| h.join("MenoTrial")));
-        let beside: AppDirectoriesOverride = serde_json::from_str(r#"{"data":"trial-data"}"#).unwrap();
-        assert_eq!(named_by(&beside, Named::Data), std::env::current_exe().ok().and_then(|e| e.parent().map(|p| p.join("trial-data"))));
-        assert_eq!(named_by(&beside, Named::LocalData), None);
-        let unknown: AppDirectoriesOverride = serde_json::from_str(r#"{"data":"$VIDEO/MenoTrial"}"#).unwrap();
-        assert_eq!(named_by(&unknown, Named::Data), None);
-        // (and the config Meno is built with names the folders Meno's are)
-        let read = |name: &str| -> serde_json::Value { serde_json::from_str(&fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join(name)).unwrap()).unwrap() };
-        let own: AppDirectoriesOverride = serde_json::from_value(read("tauri.conf.json")["app"]["appDirectoriesOverride"].clone()).unwrap();
-        assert_eq!(named_by(&own, Named::Data), meno_data_dir());
-        #[cfg(not(windows))]
-        assert_eq!(named_by(&own, Named::LocalData), meno_local_data_dir());
+        let trial = over(r#"{"data":"$DATA/MenoTrial","localData":"$LOCALDATA/MenoTrial/./data/"}"#);
+        assert_eq!(named_by(&trial, Named::Data), Ok(data_base().map(|b| b.join("MenoTrial"))));
+        assert_eq!(named_by(&trial, Named::LocalData), Ok(local_data_base().map(|b| b.join("MenoTrial").join("data"))));
+        let built = Built { over: Some(trial), identifier: "dev.example.trial".into() };
+        assert_eq!(folder_of(Some(&built), Named::Data), data_base().map(|b| b.join("MenoTrial")));
+        // (one folder for them all)
+        let root = over(r#""$HOME/MenoTrial""#);
+        assert_eq!(named_by(&root, Named::LocalData), Ok(dirs::home_dir().map(|h| h.join("MenoTrial"))));
+        // (a folder the override does not name: Tauri's own, the system folder's under the identifier)
+        let data_only = Built { over: Some(over(r#"{"data":"$DATA/MenoTrial"}"#)), identifier: "dev.example.trial".into() };
+        assert_eq!(folder_of(Some(&data_only), Named::LocalData), local_data_base().map(|b| b.join("dev.example.trial")));
+        // (what cannot be worked out - a variable Meno does not know, a relative path - is refused, and no
+        // folder is given for it: never the released Meno's in its place)
+        for named in [r#"{"data":"$DOCUMENT/MenoTrial","localData":"$DOCUMENT/MenoTrial"}"#, r#"{"data":"trial","localData":"trial"}"#, r#""$TEMP/MenoTrial""#] {
+            let built = Built { over: Some(over(named)), identifier: "dev.example.trial".into() };
+            for which in [Named::Data, Named::LocalData] {
+                assert!(named_by(built.over.as_ref().unwrap(), which).is_err(), "{named}");
+                assert_eq!(folder_of(Some(&built), which), None, "{named}");
+            }
+            assert!(built_with(built).is_err(), "{named}");
+        }
+        // (and the config Meno is built with - this platform's over the main one, as the build merges them -
+        // names the folders the released Meno's are, both of them, on every platform)
+        let read = |name: &str| -> Option<serde_json::Value> { fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join(name)).ok().map(|t| serde_json::from_str(&t).unwrap()) };
+        let mut config = read("tauri.conf.json").unwrap();
+        let platform = if cfg!(windows) { "tauri.windows.conf.json" } else if cfg!(target_os = "macos") { "tauri.macos.conf.json" } else { "tauri.linux.conf.json" };
+        if let Some(own) = read(platform) {
+            merged(&mut config, &own);
+        }
+        let built = Built { over: Some(serde_json::from_value(config["app"]["appDirectoriesOverride"].clone()).unwrap()), identifier: config["identifier"].as_str().unwrap().into() };
+        assert_eq!(folder_of(Some(&built), Named::Data), meno_data_dir());
+        assert_eq!(folder_of(Some(&built), Named::LocalData), meno_local_data_dir());
+        // (the merge as the build's: on Windows the local data in a folder of its own)
+        let mut windows = read("tauri.conf.json").unwrap();
+        merged(&mut windows, &read("tauri.windows.conf.json").unwrap());
+        assert_eq!(windows["app"]["appDirectoriesOverride"]["localData"], "$LOCALDATA/Meno/data");
+        assert_eq!(windows["app"]["appDirectoriesOverride"]["data"], "$DATA/Meno");
     }
 
     #[test]

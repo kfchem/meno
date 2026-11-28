@@ -1201,8 +1201,15 @@ apart from the released Meno's - keeps everything in those: at a start,
 before anything uses them, Meno takes the folders from the config it was
 built with (`folders::built_with`), so its log, its settings and a job's
 runner, which has no window to ask, find the same folders as Tauri's
-`app_*_dir` and the window. What a Meno before 0.1.14 kept is still moved
-into the released Meno's folders, whose it is.
+`app_*_dir` and the window. Meno works a named folder out as Tauri does
+where it begins with `$DATA`, `$LOCALDATA`, `$CONFIG`, `$CACHE` or `$HOME`,
+or is absolute; a folder the config does not name is Tauri's own, under
+the build's identifier. Any other (another of Tauri's variables, or a
+relative path, which Tauri puts beside the app in a place that differs by
+system) Meno does not guess: it does not start, and says why, rather than
+keep anything in the released Meno's folders in their place. What a Meno
+before 0.1.14 kept is still moved into the released Meno's folders, whose
+it is.
 
 The local app data dir (`local_data_dir` in `lib.rs`, `BaseDirectory.AppLocalData`
 in the webview) holds what is large and of this computer alone: uv's and pixi's
