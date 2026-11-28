@@ -55,7 +55,17 @@ export const WORDS_STEPS: readonly number[] = [6, 7, 8, 9, 10, 11, 12, 14, 16, 1
  * it alone (P450, H1, C18) but for an element's own molecules (H2, S8).
  */
 function wordRuns(word: string): TextRun[] {
-  if (!/\p{L}/u.test(word) || AS_TYPED_WORDS.has(word)) return [{ text: word }];
+  if (!/\p{L}/u.test(word) || AS_TYPED_WORDS.has(word) || /^pH[\d.]+$/.test(word)) return [{ text: word }];
+  // (a name of the list within brackets, before a stop or a comma, or before a hyphen - (SN2), SN2., SN2-type: as typed, what follows the hyphen as any word)
+  const [, open, inner, close] = /^([([]*)(.*?)([)\].,:;!?]*)$/u.exec(word)!;
+  const head = inner.split("-")[0];
+  if (AS_TYPED_WORDS.has(head) && (open || close || head !== inner)) {
+    const after = inner.slice(head.length + 1);
+    return [{ text: open + head + (head !== inner ? "-" : "") }, ...(after ? wordRuns(after) : []), ...(close ? [{ text: close }] : [])];
+  }
+  // (the electron, and electrons counted: e-, 2e-)
+  const electron = /^(\d*e)[−-]$/.exec(word);
+  if (electron) return [{ text: electron[1] }, { text: "−", sup: true }];
   const signed = /[a-zA-Z0-9)\]][+−-]$/.test(word);
   let body = signed ? word.slice(0, -1) : word;
   const units = labelUnits(body);
@@ -65,13 +75,14 @@ function wordRuns(word: string): TextRun[] {
   const charged = signed && ((formula && units.some((u) => /^[\p{Lu}([]/u.test(u))) || SYMBOLS.has(body) || GENERIC.has(body));
   if (signed && !charged) return [{ text: word }];
   if (!signed && lone && (SYMBOLS.has(lone[1]) || GENERIC.has(lone[1])) && !ELEMENTS_AS_MOLECULES.has(body)) return [{ text: word }];
-  // (the digits that go with the sign: a metal's one - Fe3+; a bracket's - [Fe(CN)6]4-; of two or more, the last - SO42-)
+  // (the digits that go with the sign: a metal's one - Fe3+, M2+, Ln3+; a bracket's - [Fe(CN)6]4-; of two or more, the last, 2 to 9 - SO42-)
   let charge = "";
   if (charged) {
     const sign = word.slice(-1).replace("-", "−");
     const ion = /^(\p{Lu}\p{Ll}?)(\d)$/u.exec(body);
     const bracket = /\](\d+)$/.exec(body);
-    const digits = ion && metal.has(ion[1]) ? ion[2] : bracket ? bracket[1] : /(?<=\d)\d$/.exec(body)?.[0] ?? "";
+    // (a charge is never written 0 or 1: C60- is C60 with its charge)
+    const digits = ion && (metal.has(ion[1]) || ion[1] === "M" || ion[1] === "Ln") ? ion[2] : bracket ? bracket[1] : /(?<=\d)[2-9]$/.exec(body)?.[0] ?? "";
     body = body.slice(0, body.length - digits.length);
     charge = digits + sign;
   }

@@ -62,6 +62,14 @@ describe("a caption's words", () => {
   it("set the names of mechanisms as typed", () => {
     for (const w of ["SN1", "SN2", "SN2'", "SNi", "SRN1", "E1", "E2", "E1cB"]) expect(shown(w)).toBe(w);
     expect(shown("an SN2 step")).toBe("an SN2 step");
+    // (within brackets, before a stop or a comma, before a hyphen - what follows the hyphen set as any word)
+    expect(shown("(SN2)")).toBe("(SN2)");
+    expect(shown("by SN2.")).toBe("by SN2.");
+    expect(shown("SN1, E1")).toBe("SN1, E1");
+    expect(shown("SN2-type")).toBe("SN2-type");
+    expect(shown("an SN2-like step")).toBe("an SN2-like step");
+    expect(shown("[E2]")).toBe("[E2]");
+    expect(shown("E1cB-like")).toBe("E1cB-like");
     // (the formulae beside them keep their counts)
     expect(shown("NO2, CS2")).toBe("NO|_2|, CS|_2");
   });
@@ -87,6 +95,11 @@ describe("a caption's words", () => {
   it("set a sign at a word's end as a charge only on a formula or an element's symbol", () => {
     expect(shown("H+, Cl-, OH-, Na+")).toBe("H|^+|, Cl|^−|, OH|^−|, Na|^+");
     expect(shown("NH4+, Me4N+, M+")).toBe("NH|_4|^+|, Me|_4|N|^+|, M|^+");
+    // (the electron, and electrons counted)
+    expect(shown("e-")).toBe("e|^−");
+    expect(shown("+ 2e-")).toBe("+ 2e|^−");
+    // (pH and a number: as typed)
+    expect(shown("pH7, pH7.4")).toBe("pH7, pH7.4");
     for (const w of ["ortho-", "para-", "anti-", "syn-", "cis-", "trans-", "tert-", "TS1-", "Fig2-"]) expect(shown(w)).toBe(w);
     // (a hyphen within a word is a hyphen)
     expect(shown("N-methyl, O-alkylation, C-H, S-phenyl")).toBe("N-methyl, O-alkylation, C-H, S-phenyl");
@@ -100,6 +113,12 @@ describe("a caption's words", () => {
     expect(shown("Cr2O72-")).toBe("Cr|_2|O|_7|^2−");
     expect(shown("S2O32-, O22-")).toBe("S|_2|O|_3|^2−|, O|_2|^2−");
     expect(shown("Hg22+")).toBe("Hg|_2|^2+");
+    // (a charge is never written 0 or 1: the last digit goes with the sign only where it is 2 to 9)
+    expect(shown("C60-")).toBe("C|_60|^−");
+    expect(shown("C70-")).toBe("C|_70|^−");
+    expect(shown("S42-")).toBe("S|_4|^2−");
+    // (a metal written M or Ln: its digit the charge)
+    expect(shown("M2+, M3+, Ln3+")).toBe("M|^2+|, M|^3+|, Ln|^3+");
     expect(shown("[Fe(CN)6]4-")).toBe("[Fe(CN)|_6|]|^4−");
     expect(shown("[Rh(cod)Cl]2")).toBe("[Rh(cod)Cl]|_2");
     // (one digit on a formula of several parts, or on a nonmetal: the count)
