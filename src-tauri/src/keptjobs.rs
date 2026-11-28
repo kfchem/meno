@@ -441,8 +441,8 @@ fn holds(sources: &mut HashMap<PathBuf, Option<zip::ZipArchive<File>>>, from: &P
 /// Where each job file `asked` for is to be had whole, for a save to
 /// `target`: in the workspace files it names (`from`), each only where
 /// `readable`; `target` as it is now, whoever wrote it; a copy kept beside
-/// any of those; else its job's folder in `jobs_roots`. By its name and size
-/// - and, `whole`, its SHA-256, read whole; a save checks it as it is
+/// any of those; else its job's folder in `jobs_roots`. By its name and
+/// size, and, `whole`, its SHA-256, read whole; a save checks it as it is
 /// written in any case. None for one found nowhere.
 pub fn found_where(target: &Path, asked: &[Asked], jobs_roots: &[PathBuf], whole: bool, readable: impl Fn(&Path) -> bool) -> Vec<Option<Found>> {
     let mut sources = HashMap::new();
@@ -454,9 +454,9 @@ pub fn found_where(target: &Path, asked: &[Asked], jobs_roots: &[PathBuf], whole
                 return None;
             }
             let mut places: Vec<PathBuf> = Vec::new();
-            for p in a.from.iter().filter(|p| readable(p)).chain(readable(target).then_some(target)) {
-                if !places.contains(p) {
-                    places.push(p.clone());
+            for p in a.from.iter().map(PathBuf::as_path).filter(|p| readable(p)).chain(readable(target).then_some(target)) {
+                if !places.iter().any(|q| q == p) {
+                    places.push(p.to_path_buf());
                 }
             }
             let copies: Vec<PathBuf> = places.iter().flat_map(|p| copies_beside(p)).collect();
@@ -468,7 +468,7 @@ pub fn found_where(target: &Path, asked: &[Asked], jobs_roots: &[PathBuf], whole
             let dir = jobs::job_in(jobs_roots, &a.job)?;
             let mut file = open_inside(&dir, &a.name).ok()?;
             let size_ok = file.metadata().is_ok_and(|m| m.len() == a.size);
-            (size_ok && (!whole || copied_checked(&mut file, &mut io::sink(), &mut buf).is_ok_and(|sha| sha == a.sha256))).then_some(Found { from: None, ..Default::default() })
+            (size_ok && (!whole || copied_checked(&mut file, &mut io::sink(), &mut buf).is_ok_and(|sha| sha == a.sha256))).then_some(Found { from: None })
         })
         .collect()
 }
