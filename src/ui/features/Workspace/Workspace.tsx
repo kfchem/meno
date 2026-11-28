@@ -98,9 +98,9 @@ import { knownOfMolecules } from "./utils/written";
 import { carriedOf, cutShort } from "./utils/workspace";
 import type { Conformers } from "../../../lib/roles/client";
 import { runAllNote, runNote } from "./workflow/earlierRuns";
-import { madeByRun, ranBy, viewStillSince } from "./workflow/runShown";
+import { madeByRun, ranBy, untouchedSince, type PageNow } from "./workflow/runShown";
 import { allToRun, heldByRepeats, stepsAfter } from "./workflow/flow";
-import { pressHeld } from "./components/pressHeld";
+import { actsSoFar, pressHeld, typing } from "./components/pressHeld";
 import PartMenu, { type CanvasCommand, type MenuMolecule3D, type MenuTarget } from "./PartMenu";
 import { deleteFromMenu } from "./menuDelete";
 import { aboutDrawing, menuTargetGone, pushFromMenu } from "./utils/menuTarget";
@@ -515,18 +515,24 @@ function WorkspaceContent({
     return { x0: cam.position.x - w, x1: cam.position.x + w - covered, y0: cam.position.y - h, y1: cam.position.y + h };
   }, [camRef, domRef]);
   // A run - Run, Run from here, Run all alike - and the sets its steps made shown once all have ended, where they are not seen
-  // whole - as what is put down is shown (utils/viewShow) - unless the chemist moved the view since it began, or holds a press as
-  // it ends (workflow/runShown)
+  // whole - as what is put down is shown (utils/viewShow) - only where the chemist has done nothing on the page since they asked
+  // for it: no press, no key, the same selection, tab and view; else nothing moves and nothing is said (workflow/runShown)
+  const frontNow = useRef(active);
+  frontNow.current = active;
+  const pageNow = useCallback((): PageNow => {
+    const st = store.getState();
+    return { view: viewBox(), acts: actsSoFar(), selected: [st.sel, st.sel3d, st.selFlow], tab: frontNow.current, held: pressHeld(), typing: typing() };
+  }, [store, viewBox]);
   const runShown = useCallback(
     async (targets: readonly number[], run: () => Promise<void>) => {
       const ran = ranBy(store.getState(), targets);
-      const began = viewBox();
+      const began = pageNow();
       await run();
-      if (!viewStillSince(began, viewBox(), pressHeld())) return;
+      if (!untouchedSince(began, pageNow())) return;
       const box = madeByRun(store.getState(), ran);
       if (box) store.getState().requestShow(box);
     },
-    [store, viewBox],
+    [store, pageNow],
   );
   const runAllShown = () => runShown(allToRun(store.getState()), () => store.getState().runAll());
   // a talk given from the slide that is most nearly what is seen (docs/PRESENTING.md)

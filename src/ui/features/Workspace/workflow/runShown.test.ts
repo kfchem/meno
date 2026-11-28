@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { emptyWorkspaceDocument } from "../document";
 import { addStep } from "./model";
 import { setsOnPage, unseenSets } from "./onPage";
-import { madeByRun, ranBy, viewStillSince } from "./runShown";
+import { madeByRun, ranBy, untouchedSince, type PageNow } from "./runShown";
+import { actsSoFar, heard, pressHeld, typing } from "../components/pressHeld";
 import { heldByRepeats } from "./flow";
 
 const view = { x0: 0, x1: 800, y0: -600, y1: 0 };
@@ -30,13 +31,40 @@ describe("what the end of Run all shows", () => {
     expect(madeByRun(two, [])).toBeNull();
   });
 
-  it("moves the view only where it stands where it stood as the run began, and no press is held", () => {
-    expect(viewStillSince(view, { ...view }, false)).toBe(true);
-    expect(viewStillSince(view, { ...view, x0: 40, x1: 840 }, false)).toBe(false);
-    expect(viewStillSince(view, { x0: -400, x1: 1200, y0: -1200, y1: 0 }, false)).toBe(false);
-    expect(viewStillSince(view, { ...view }, true)).toBe(false);
-    expect(viewStillSince(null, view, false)).toBe(false);
-    expect(viewStillSince(view, null, false)).toBe(false);
+  it("moves the view only where the chemist has done nothing on the page since the press", () => {
+    const sel = { atoms: new Set<number>() };
+    const began: PageNow = { view, acts: 4, selected: [sel], tab: true, held: false, typing: false };
+    // (nothing done: it eases there)
+    expect(untouchedSince(began, { ...began, view: { ...view } })).toBe(true);
+    // (an edit, a menu, a card opened, a press anywhere: a press counted - the view stays)
+    expect(untouchedSince(began, { ...began, acts: 5 })).toBe(false);
+    // (a key in a text being written: counted, and the text still has the keys - the view stays)
+    expect(untouchedSince(began, { ...began, acts: 6, typing: true })).toBe(false);
+    expect(untouchedSince(began, { ...began, typing: true })).toBe(false);
+    // (what is selected changed)
+    expect(untouchedSince(began, { ...began, selected: [{ atoms: new Set([1]) }] })).toBe(false);
+    // (the view moved: a wheel, a pinch, a column opened)
+    expect(untouchedSince(began, { ...began, view: { ...view, x0: 40, x1: 840 } })).toBe(false);
+    expect(untouchedSince(began, { ...began, view: { x0: -400, x1: 1200, y0: -1200, y1: 0 } })).toBe(false);
+    // (another tab shown, or a press held as it ends)
+    expect(untouchedSince(began, { ...began, tab: false })).toBe(false);
+    expect(untouchedSince(began, { ...began, held: true })).toBe(false);
+    expect(untouchedSince({ ...began, view: null }, began)).toBe(false);
+  });
+
+  it("counts every press and key in the window, never a let-go, and knows a text being written", () => {
+    const at = actsSoFar();
+    heard({ type: "pointerdown", buttons: 1 });
+    expect(pressHeld()).toBe(true);
+    heard({ type: "pointerup", buttons: 0 });
+    heard({ type: "keydown" });
+    expect(actsSoFar() - at).toBe(2);
+    expect(pressHeld()).toBe(false);
+    expect(typing({ tagName: "INPUT" } as Element)).toBe(true);
+    expect(typing({ tagName: "TEXTAREA" } as Element)).toBe(true);
+    expect(typing({ tagName: "DIV", isContentEditable: true } as unknown as Element)).toBe(true);
+    expect(typing({ tagName: "CANVAS", isContentEditable: false } as unknown as Element)).toBe(false);
+    expect(typing(null)).toBe(false);
   });
 
   it("takes in the sets of the steps a Repeat holds, as it runs them - Run all naming the Repeat alone", () => {

@@ -1171,9 +1171,13 @@ first, and those a Repeat among them holds - the sets those steps made
 are shown as what is put down is shown (WORKSPACE.md,
 *Putting things down*): where they are not seen whole - past the window's
 edge in a small window - the view eases along to take them in, or out as
-little as needed; seen whole, it stays. It does not move where the
-chemist has moved the view since the run began, or holds a press as it
-ends: the view is theirs (workflow/runShown).
+little as needed; seen whole, it stays. It moves only where the chemist
+has done nothing on the page since they pressed: no press anywhere, no
+key (an edit, a menu, a card opened, a text written each take one), the
+same things selected, the same tab in front, the view where it stood -
+and nothing held or being written as the run ends. Anything done, and
+the view stays where they have it, and nothing is said: what the run
+made is on the page beside its step (workflow/runShown).
 
 **An empty set** (2026-10-30). A step before it that ran well may give
 nothing this time: a branch that took none, a last round of restraints
